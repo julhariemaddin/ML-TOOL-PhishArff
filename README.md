@@ -1,5 +1,8 @@
 <p align="center"><img src="src/main/resources/logo.png" alt="PhishArff" width="260"></p>
 
+[![Release](https://img.shields.io/github/v/release/julhariemaddin/ML-TOOL-PhishArff)](https://github.com/julhariemaddin/ML-TOOL-PhishArff/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/julhariemaddin/ML-TOOL-PhishArff)](LICENSE)
+
 # PhishArff
 
 Turn **link** and **email** CSV files into **Weka-ready ARFF** files, with data checks, checksums, and an exportable Java feature extractor.
@@ -16,11 +19,17 @@ A Weka model is only as good as its data. Many public phishing datasets are bias
 - **Check** the data. Every row is rated 0-100 (is it a URL? is it a valid email?), labels are normalised, duplicates counted, and link data is tested for class bias. You confirm before anything is exported.
 - **Export** the `.arff` file (plus an `.info.txt` report with checksums, counts and the feature list), and the **Java feature extractor** used, so your website computes the same numbers.
 
+## Download
+
+Get the latest version from the [**Releases page**](https://github.com/julhariemaddin/ML-TOOL-PhishArff/releases/latest). Download the `.zip`, extract it, and double-click `run.bat`.
+
 ## Run it
 
 Double-click **`run.bat`** (Windows). It needs Java 17+ and an internet connection on the first run (it downloads Maven and JavaFX once). If Maven is not installed, `run.bat` fetches a private copy into `.tools/`.
 
 Or with Maven: `mvn compile javafx:run`
+
+Or download a ready-made package from the [latest release](https://github.com/julhariemaddin/ML-TOOL-PhishArff/releases/latest).
 
 ## CSV format
 
