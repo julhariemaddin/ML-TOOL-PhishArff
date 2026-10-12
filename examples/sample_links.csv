@@ -1,0 +1,16 @@
+URL,Domain,label,length
+https://www.google.com,google.com,benign,22
+https://www.wikipedia.org,wikipedia.org,benign,25
+http://paypa1-secure.xyz/login?id=9,paypa1-secure.xyz,phishing,35
+http://192.168.4.7/verify/account,192.168.4.7,phishing,30
+not a url at all,x,phishing,5
+https://www.google.com,google.com,benign,22
+https://github.com/openjdk/jdk,github.com,good,30
+http://paypal.com.account-verify.xyz:8080/login?id=1&x=2,x,1,56
+ftp2://weird.com,x,0,1
+http://bit.ly/3abc,bit.ly,phishing,18
+https://www.conflict.com,c,benign,1
+https://www.conflict.com,c,phishing,1
+http://x,y,benign,1
+https://www.bbc.com/news,bbc.com,benign,1
+https://www.amazon.com,amazon.com,unknownlabel,1

@@ -1,0 +1,9 @@
+Subject;From;Body;Class
+"Verify your account NOW!!!";"PayPal Support <help@paypa1-secure.xyz>";"Dear user, your account is suspended. Login immediately at http://paypa1-secure.xyz/login or www.bit.ly/x";phishing
+"Meeting notes";"Ana <ana@company.com>";"Hi team,
+attached are the notes.
+See https://company.com/notes";legitimate
+"";"bad sender";"";phishing
+"Lunch?";"bob@gmail.com";"Want to grab lunch at noon?";0
+"Quarterly report";"carol@corp.org";"Please find the quarterly report summary below. Revenue grew 4 percent.";legitimate
+"WIN a PRIZE!!!";"promo@win-big.top";"Congratulations winner! Claim your free gift card now at http://192.168.1.5/claim?id=77";1
