@@ -1,7 +1,9 @@
 <p align="center"><img src="src/main/resources/logo.png" alt="PhishArff" width="260"></p>
 
-[![Release](https://img.shields.io/github/v/release/julhariemaddin/ML-TOOL-PhishArff)](https://github.com/julhariemaddin/ML-TOOL-PhishArff/releases/latest)
-[![License: MIT](https://img.shields.io/github/license/julhariemaddin/ML-TOOL-PhishArff)](LICENSE)
+<p align="center">
+  <a href="https://github.com/julhariemaddin/ML-TOOL-PhishArff/releases/latest"><img src="https://img.shields.io/github/v/release/julhariemaddin/ML-TOOL-PhishArff" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/julhariemaddin/ML-TOOL-PhishArff" alt="License: MIT"></a>
+</p>
 
 # PhishArff
 
