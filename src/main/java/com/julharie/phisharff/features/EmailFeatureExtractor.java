@@ -153,12 +153,12 @@ public final class EmailFeatureExtractor {
             String real = FeatureExtractor.registrableDomain(domain);
             String tld = domain.contains(".") ? domain.substring(domain.lastIndexOf('.') + 1) : "";
             String senderLower = sender.toLowerCase(Locale.ROOT);
-            boolean brandMismatch = FeatureExtractor.BRANDS.stream()
+            boolean brandMismatch = Lexicon.BRANDS.stream()
                     .anyMatch(b -> senderLower.contains(b) && !real.contains(b));
             f.put("sender_domain_length", (double) domain.length());
             f.put("sender_domain_has_digits", flag(countDigits(real) > 0));
             f.put("sender_free_provider", flag(FREE_PROVIDERS.contains(real)));
-            f.put("sender_suspicious_tld", flag(FeatureExtractor.SUSPICIOUS_TLDS.contains(tld)));
+            f.put("sender_suspicious_tld", flag(Lexicon.SUSPICIOUS_TLDS.contains(tld)));
             f.put("sender_brand_mismatch", flag(brandMismatch));
             f.put("sender_link_mismatch", flag(!links.isEmpty() && !linkDomains.contains(real)));
         }

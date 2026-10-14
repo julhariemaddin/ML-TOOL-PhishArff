@@ -20,22 +20,32 @@ public final class ExtractorExporter {
     private static final Pattern PACKAGE_NAME = Pattern.compile("[a-z_][a-z0-9_]*(\\.[a-z_][a-z0-9_]*)*");
     private static final String PACKAGE_LINE = "package com.julharie.phisharff.features;";
 
+    /** The link extractor is several small classes in one package. They must all be copied together. */
+    private static final List<String> LINK_CLASSES = List.of(
+            "FeatureExtractor", "FeatureConfig", "UrlParts", "HostInfo", "HostStats", "NgramHasher", "Lexicon");
+
     private ExtractorExporter() {}
 
-    /** Returns the files written. pkg may be blank (default package). */
+    /** Returns the files written. pkg may be blank (default package). No n-gram columns. */
     public static List<Path> export(DataKind kind, Path folder, String pkg, boolean domainMode,
                                     boolean hasSubject, boolean hasSender) throws IOException {
+        return export(kind, folder, pkg, domainMode, hasSubject, hasSender, 0);
+    }
+
+    /** Same, with the number of hashed n-gram columns the ARFF file was built with (0 = none). */
+    public static List<Path> export(DataKind kind, Path folder, String pkg, boolean domainMode,
+                                    boolean hasSubject, boolean hasSender, int ngramBuckets) throws IOException {
         String p = pkg == null ? "" : pkg.trim();
         if (!p.isEmpty() && !PACKAGE_NAME.matcher(p).matches()) {
             throw new IOException("Package name must be lowercase like com.example.features");
         }
         Files.createDirectories(folder);
         List<Path> written = new ArrayList<>();
-        written.add(copy("FeatureExtractor", folder, p));
+        for (String className : LINK_CLASSES) written.add(copy(className, folder, p));   // emails reuse the link features too
         if (kind == DataKind.EMAIL) written.add(copy("EmailFeatureExtractor", folder, p));
 
         Path usage = folder.resolve("PhishArff-usage.txt");
-        Files.writeString(usage, usage(kind, p, domainMode, hasSubject, hasSender), StandardCharsets.UTF_8);
+        Files.writeString(usage, usage(kind, p, domainMode, hasSubject, hasSender, ngramBuckets), StandardCharsets.UTF_8);
         written.add(usage);
         return written;
     }
@@ -54,16 +64,25 @@ public final class ExtractorExporter {
         return out;
     }
 
-    private static String usage(DataKind kind, String pkg, boolean domainMode, boolean hasSubject, boolean hasSender) {
+    private static String usage(DataKind kind, String pkg, boolean domainMode, boolean hasSubject, boolean hasSender, int ngramBuckets) {
         StringBuilder sb = new StringBuilder("PhishArff - how to use the exported feature extractor\n");
-        sb.append("Copy the .java file(s) into your project").append(pkg.isEmpty() ? "" : " under the package " + pkg).append(".\n\n");
+        sb.append("Copy ALL the .java files into your project (together, in one folder)")
+                .append(pkg.isEmpty() ? "" : " under the package " + pkg).append(".\n\n");
         if (kind == DataKind.LINK) {
             sb.append("Your ARFF file was built in ").append(domainMode ? "DOMAIN" : "FULL URL").append(" mode, so call:\n\n");
-            sb.append(domainMode
-                    ? "    double[] f = FeatureExtractor.extractDomainLevel(url);\n"
-                    : "    double[] f = FeatureExtractor.extract(url);\n");
-            sb.append("\nAttribute order (20 numbers, then the class):\n");
+            if (ngramBuckets > 0) {
+                sb.append("    double[] f = FeatureExtractor.extractAll(url, new FeatureConfig(").append(domainMode).append(", ")
+                        .append(ngramBuckets).append("));\n");
+            } else {
+                sb.append(domainMode
+                        ? "    double[] f = FeatureExtractor.extractDomainLevel(url);\n"
+                        : "    double[] f = FeatureExtractor.extract(url);\n");
+            }
+            sb.append("\nAttribute order (").append(FeatureExtractor.FEATURE_NAMES.size()).append(" numbers");
+            if (ngramBuckets > 0) sb.append(", then ").append(ngramBuckets).append(" n-gram columns ng_0..ng_").append(ngramBuckets - 1);
+            sb.append(", then the class):\n");
             for (String n : FeatureExtractor.FEATURE_NAMES) sb.append("    ").append(n).append('\n');
+            if (ngramBuckets > 0) sb.append("    ng_0 ... ng_").append(ngramBuckets - 1).append("   (hashed character n-gram counts of the host)\n");
         } else {
             sb.append("Your ARFF file used these columns: body").append(hasSubject ? ", subject" : "").append(hasSender ? ", sender" : "").append(".\nSo call:\n\n");
             sb.append("    double[] f = EmailFeatureExtractor.extract(")
@@ -72,7 +91,8 @@ public final class ExtractorExporter {
             sb.append("\nAttribute order (then the class):\n");
             for (String n : EmailFeatureExtractor.featureNames(hasSubject, hasSender)) sb.append("    ").append(n).append('\n');
         }
-        sb.append("\nIn Weka code, put the numbers in a DenseInstance in this order, with the class value last.\n");
+        sb.append("\nIn Weka code, put the numbers in a DenseInstance in this order, with the class value last")
+                .append(ngramBuckets > 0 ? " (a model trained on the sparse ARFF file accepts dense instances too).\n" : ".\n");
         sb.append("If you change a feature, rebuild the ARFF file and retrain the model.\n");
         return sb.toString();
     }

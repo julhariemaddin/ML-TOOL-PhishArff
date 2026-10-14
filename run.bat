@@ -21,19 +21,37 @@ if exist "%MAVEN_DIR%\bin\mvn.cmd" goto havemaven
 
 echo First run only: downloading Maven %MAVEN_VERSION% ^(about 9 MB^)...
 if not exist ".tools" mkdir ".tools"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://archive.apache.org/dist/maven/maven-3/%MAVEN_VERSION%/binaries/apache-maven-%MAVEN_VERSION%-bin.zip' -OutFile '.tools\maven.zip'"
+del ".tools\maven.zip" >nul 2>nul
+set "MPATH=org/apache/maven/apache-maven/%MAVEN_VERSION%/apache-maven-%MAVEN_VERSION%-bin.zip"
+
+rem Maven Central first (fast CDN). archive.apache.org is a slow archive server and is only the last fallback.
+call :fetch "https://repo.maven.apache.org/maven2/%MPATH%"
+if not errorlevel 1 goto unzip
+call :fetch "https://dlcdn.apache.org/maven/maven-3/%MAVEN_VERSION%/binaries/apache-maven-%MAVEN_VERSION%-bin.zip"
+if not errorlevel 1 goto unzip
+call :fetch "https://archive.apache.org/dist/maven/maven-3/%MAVEN_VERSION%/binaries/apache-maven-%MAVEN_VERSION%-bin.zip"
 if errorlevel 1 goto nodownload
+
+:unzip
+echo Unpacking Maven...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Force -Path '.tools\maven.zip' -DestinationPath '.tools'"
 if errorlevel 1 goto nodownload
 del ".tools\maven.zip" >nul 2>nul
+goto havemaven
+
+rem ---- :fetch URL  - downloads to .tools\maven.zip with a progress bar, gives up when the connection stalls
+:fetch
+echo Trying %~1
+curl.exe -L -f --retry 2 --connect-timeout 15 --speed-limit 20000 --speed-time 20 -# -o ".tools\maven.zip" "%~1"
+exit /b %errorlevel%
 
 :havemaven
 set "MVN=%MAVEN_DIR%\bin\mvn.cmd"
 
 rem ===== 3. Build and start =====
 :run
-echo Starting PhishArff... ^(the first start downloads JavaFX and takes a minute^)
-call "%MVN%" -q compile javafx:run
+echo Starting PhishArff... ^(the first start downloads JavaFX and other libraries, 1 to 5 minutes; lines below show the progress^)
+call "%MVN%" compile javafx:run
 if errorlevel 1 goto failed
 exit /b 0
 

@@ -1,12 +1,10 @@
 package com.julharie.phisharff;
 
+import com.julharie.phisharff.core.DatasetBuilder;
 import com.julharie.phisharff.db.Database;
 import com.julharie.phisharff.ui.AboutPage;
 import com.julharie.phisharff.ui.HomePage;
-import javafx.animation.FadeTransition;
-import javafx.animation.TranslateTransition;
 import javafx.application.Application;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
@@ -17,17 +15,18 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
-import javafx.util.Duration;
 
 /**
  * PhishArff - turn link and email CSV files into Weka-ready ARFF files.
  * Copyright (c) 2026 Julharie M. Maddin (https://github.com/julhariemaddin, ORCID 0009-0009-3366-1271)
  * MIT License.
  *
- * The window has a header with two pages (Home, About) and a footer.
+ * Plain, boxed layout in the spirit of the Weka Explorer: a header with the title and two pages (Home, About),
+ * the page, and a status bar. The application name appears only in the header.
  */
 public class App extends Application {
 
@@ -41,11 +40,13 @@ public class App extends Application {
         home = new HomePage(db, getHostServices());
         about = new AboutPage(getHostServices());
 
-        // ---- header: logo on the left, navigation on the right
-        ImageView logo = new ImageView(new Image(App.class.getResourceAsStream("/logo-horizontal.png")));
-        logo.setFitHeight(42);
-        logo.setPreserveRatio(true);
-        logo.setSmooth(true);
+        // ---- header: icon and title on the left, pages on the right
+        ImageView icon = new ImageView(new Image(App.class.getResourceAsStream("/icon-64.png")));
+        icon.setFitHeight(20);
+        icon.setPreserveRatio(true);
+        icon.setSmooth(true);
+        Label title = new Label("PhishArff");
+        title.getStyleClass().add("header-title");
 
         ToggleGroup group = new ToggleGroup();
         ToggleButton homeBtn = navButton("Home", group);
@@ -53,18 +54,22 @@ public class App extends Application {
         homeBtn.setSelected(true);
         homeBtn.setOnAction(e -> show(home));
         aboutBtn.setOnAction(e -> show(about));
-        // never allow "nothing selected"
         group.selectedToggleProperty().addListener((o, a, b) -> { if (b == null) a.setSelected(true); });
 
         Region spacer = new Region();
-        HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
-        HBox header = new HBox(10, logo, spacer, homeBtn, aboutBtn);
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox header = new HBox(8, icon, title, spacer, homeBtn, aboutBtn);
         header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("header");
 
-        Label footerText = new Label("PhishArff " + com.julharie.phisharff.core.DatasetBuilder.VERSION
-                + "   |   MIT License   |   Copyright (c) 2026 Julharie M. Maddin");
-        HBox footer = new HBox(footerText);
+        // ---- status bar
+        Label status = new Label();
+        status.textProperty().bind(javafx.beans.binding.Bindings.concat("Status: ", com.julharie.phisharff.ui.StatusBar.text()));
+        status.getStyleClass().add("status-text");
+        Label version = new Label("Version " + DatasetBuilder.VERSION + "  |  MIT License  |  (c) 2026 Julharie M. Maddin");
+        version.getStyleClass().add("status-text");
+        HBox footer = new HBox(status, grow(), version);
+        footer.setAlignment(Pos.CENTER_LEFT);
         footer.getStyleClass().add("footer");
 
         BorderPane root = new BorderPane();
@@ -73,15 +78,20 @@ public class App extends Application {
         root.setBottom(footer);
         content.getChildren().add(home);
 
-        Scene scene = new Scene(root, 1120, 800);
+        Scene scene = new Scene(root, 1060, 780);
         scene.getStylesheets().add(App.class.getResource("/app.css").toExternalForm());
         stage.getIcons().add(new Image(App.class.getResourceAsStream("/icon.png")));
         stage.setTitle("PhishArff");
-        stage.setMinWidth(940);
-        stage.setMinHeight(660);
+        stage.setMinWidth(900);
+        stage.setMinHeight(640);
         stage.setScene(scene);
         stage.show();
-        animateIn(home);
+    }
+
+    private static Region grow() {
+        Region r = new Region();
+        HBox.setHgrow(r, Priority.ALWAYS);
+        return r;
     }
 
     private static ToggleButton navButton(String text, ToggleGroup group) {
@@ -91,22 +101,9 @@ public class App extends Application {
         return b;
     }
 
-    /** Swap the page with a short fade and slide. */
     private void show(Node page) {
         if (content.getChildren().contains(page)) return;
         content.getChildren().setAll(page);
-        animateIn(page);
-    }
-
-    private static void animateIn(Node page) {
-        page.setOpacity(0);
-        FadeTransition fade = new FadeTransition(Duration.millis(220), page);
-        fade.setToValue(1);
-        TranslateTransition slide = new TranslateTransition(Duration.millis(220), page);
-        slide.setFromY(10);
-        slide.setToY(0);
-        fade.play();
-        slide.play();
     }
 
     public static void main(String[] args) {

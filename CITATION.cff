@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use PhishArff in your research, please cite it as below."
 title: "PhishArff: A Column-Adaptive CSV-to-ARFF Converter for URL and Email Phishing Data"
-version: 1.0.0
+version: 1.3.0
 date-released: 2026-10-13
 license: MIT
 authors:

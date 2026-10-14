@@ -27,11 +27,13 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * One complete workflow for one data type (links or emails):
- *   Card 1  Import   - choose a CSV, see its checksum, check the required column names
- *   Card 2  Check    - rate every row (is it a URL / a valid email?), confirm the data
- *   Card 3  Export   - write the ARFF file, or export the Java feature extractor
- * Cards 2 and 3 stay locked (dimmed) until the step before them is done.
+ * One complete workflow for one data type (links or emails), as three boxed groups:
+ *   Import      - choose a CSV, see its checksum, check the required column names
+ *   Check data  - rate every row (is it a URL / a valid email?), confirm the data
+ *   Export      - write the ARFF file, or export the Java feature extractor
+ * Check data and Export stay disabled (greyed) until the step before them is done.
+ * For links, the Export group also shows the Weka memory check: the RAM and the Java heap Weka needs for the chosen
+ * n-gram size, the Weka algorithms that fit, and a yellow warning when this computer or Weka's heap is too small.
  */
 public final class ConvertPane extends ScrollPane {
 
@@ -44,7 +46,7 @@ public final class ConvertPane extends ScrollPane {
     private boolean busy;
 
     // ---- card 1 (import)
-    private final VBox dropZone = new VBox(8);
+    private final HBox dropZone = new HBox(8);
     private final Label dropTitle;
     private final ProgressBar loadBar = new ProgressBar();
     private final Label loadStatus = Ui.label("", "muted");
@@ -64,6 +66,7 @@ public final class ConvertPane extends ScrollPane {
 
     // ---- card 3 (export)
     private final ComboBox<String> modeBox = new ComboBox<>();
+    private final ComboBox<String> ngramBox = new ComboBox<>();
     private final CheckBox balance = new CheckBox("Balance classes (same number of phishing and legitimate rows)");
     private final TextField packageField = new TextField();
     private final Button exportArffBtn = new Button("Export ARFF file");
@@ -71,6 +74,10 @@ public final class ConvertPane extends ScrollPane {
     private final ProgressBar exportBar = new ProgressBar();
     private final Label exportStatus = Ui.label("", "muted");
     private final VBox exportResult = new VBox(10);
+    private final VBox memBox = new VBox(6);
+    private final Label algoLabel = new Label();
+    private final TextField wekaHeapField = new TextField();
+    private String wekaHeapSource = "entered by you";
 
     private final Ui.Card card1, card2, card3;
     private final VBox historyBox = new VBox(6);
@@ -81,18 +88,20 @@ public final class ConvertPane extends ScrollPane {
         this.host = host;
 
         // ============================================================ CARD 1
-        dropTitle = Ui.label("Drop your " + kind.title().toLowerCase() + " CSV file here", "drop-title");
+        dropTitle = new Label("No file selected. Open a " + kind.title().toLowerCase() + " CSV file, or drop it here.");
+        dropTitle.getStyleClass().add("file-field");
+        dropTitle.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(dropTitle, Priority.ALWAYS);
         String hint = "Required columns: " + kind.requiredNames()
                 + (kind == DataKind.EMAIL ? "     Optional: subject, sender (they add more features)" : "");
-        Button choose = new Button("Choose CSV file");
+        Button choose = new Button("Open file...");
         choose.setId("choose-" + kind.name());
         choose.getStyleClass().add("btn-primary");
         choose.setOnAction(e -> chooseFile());
-        dropZone.getStyleClass().add("drop-zone");
-        dropZone.setAlignment(Pos.CENTER);
-        dropZone.getChildren().addAll(dropTitle, Ui.label(hint, "muted"), choose);
+        dropZone.setAlignment(Pos.CENTER_LEFT);
+        dropZone.getChildren().addAll(choose, dropTitle);
         dropZone.setOnDragOver(this::onDragOver);
-        dropZone.setOnDragExited(e -> dropZone.getStyleClass().remove("drop-zone-active"));
+        dropZone.setOnDragExited(e -> dropTitle.getStyleClass().remove("file-field-active"));
         dropZone.setOnDragDropped(this::onDrop);
 
         loadBar.setMaxWidth(Double.MAX_VALUE);
@@ -107,8 +116,8 @@ public final class ConvertPane extends ScrollPane {
         shaField.getStyleClass().add("mono");
         HBox.setHgrow(shaField, Priority.ALWAYS);
 
-        card1 = new Ui.Card("Import", "Choose a CSV file. PhishArff checks the column names and computes a checksum.",
-                dropZone, loadBar, loadStatus, infoGrid, columnsBox, noticeBox1);
+        card1 = new Ui.Card("Import", "Choose a CSV file. The column names are checked and a checksum is computed.",
+                dropZone, Ui.label(hint, "muted"), loadBar, loadStatus, infoGrid, columnsBox, noticeBox1);
 
         // ============================================================ CARD 2
         checkToggle.setSelected(true);
@@ -154,9 +163,43 @@ public final class ConvertPane extends ScrollPane {
             modeBox.getSelectionModel().select(1);
             modeBox.setMaxWidth(Double.MAX_VALUE);
             HBox.setHgrow(modeBox, Priority.ALWAYS);
+            ngramBox.getItems().addAll("Off (26 columns, dense ARFF)", "1024 n-gram columns", "4096 n-gram columns",
+                    "16384 n-gram columns", "65536 n-gram columns");
+            ngramBox.getSelectionModel().select(0);
+            ngramBox.setPrefWidth(230);
+            ngramBox.setMinWidth(230);
+            algoLabel.setWrapText(true);
+            algoLabel.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(algoLabel, Priority.ALWAYS);
+            HBox ngramRow = new HBox(8, ngramBox, algoLabel);
+            ngramRow.setAlignment(Pos.TOP_LEFT);
+
+            String savedHeap = db.getSetting("weka_heap_mb", "");
+            if (!savedHeap.isBlank()) {
+                wekaHeapField.setText(savedHeap);
+            } else {
+                Environment.WekaHeap detected = Environment.detectWekaHeap();
+                if (detected.known()) { wekaHeapField.setText(String.valueOf(detected.mb())); wekaHeapSource = detected.source(); }
+            }
+            wekaHeapField.setPromptText("unknown");
+            wekaHeapField.setPrefWidth(90);
+            wekaHeapField.setMaxWidth(90);
+            wekaHeapField.textProperty().addListener((o, a, b) -> {
+                wekaHeapSource = "entered by you";
+                db.setSetting("weka_heap_mb", b.trim());
+                refreshMemory();
+            });
+            ngramBox.getSelectionModel().selectedIndexProperty().addListener((o, a, b) -> refreshMemory());
+            balance.selectedProperty().addListener((o, a, b) -> refreshMemory());
+
             modeRow = new VBox(6, Ui.label("Feature mode", "section-title"), modeBox, Ui.label(
                     "Domain only ignores scheme, www, path and query. Use it when one class has a different URL shape than the other. "
-                            + "The website must use the same mode.", "muted"));
+                            + "The website must use the same mode.", "muted"),
+                    Ui.label("Character n-grams (optional)", "section-title"), ngramRow, Ui.label(
+                    "Adds hashed counts of 1-6 letter pieces of the host name. They raise accuracy a lot. The ARFF is sparse, so only the "
+                            + "Weka algorithms shown beside the list can open it without running out of memory. "
+                            + "The website must use the same number of columns.", "muted"),
+                    new Ui.Group("Memory check for Weka", memBox));
         } else {
             modeRow = Ui.label("Feature groups: body (always), plus subject and sender when those columns exist in your file.", "muted");
         }
@@ -169,8 +212,8 @@ public final class ConvertPane extends ScrollPane {
                 new Separator(), javaBox);
 
         // ============================================================ PAGE
-        VBox page = new VBox(18, card1, card2, card3, historyBox);
-        page.setPadding(new Insets(6, 4, 28, 4));
+        VBox page = new VBox(10, card1, card2, card3, historyBox);
+        page.setPadding(new Insets(4, 4, 12, 4));
         setContent(page);
         setFitToWidth(true);
         setHbarPolicy(ScrollBarPolicy.NEVER);
@@ -179,6 +222,88 @@ public final class ConvertPane extends ScrollPane {
         card3.setLocked(true);
         refreshHistory();
         updateState();
+        refreshMemory();
+    }
+
+    /** Number of hashed n-gram columns chosen in the Export card (0 = off; always 0 for emails). */
+    private int ngramBuckets() {
+        if (kind != DataKind.LINK) return 0;
+        return switch (ngramBox.getSelectionModel().getSelectedIndex()) {
+            case 1 -> 1024;
+            case 2 -> 4096;
+            case 3 -> 16384;
+            case 4 -> 65536;
+            default -> 0;
+        };
+    }
+
+    // ================================================================== Weka memory check (links)
+    /** Rows that will probably be exported: balanced or not, from the check report when there is one. */
+    private long estimateRows() {
+        if (loaded == null || !loaded.ok()) return 0;
+        if (report != null && !report.skipped()) {
+            long l = report.legit(), p = report.phishing();
+            if (l + p > 0) return balance.isSelected() ? 2 * Math.min(l, p) : l + p;
+        }
+        return loaded.totalRows();
+    }
+
+    /**
+     * Rebuilds the memory box for the chosen n-gram size: what Weka needs, what this computer and Weka's heap have, the
+     * Weka algorithms that fit, and yellow warnings. The n-gram list and the algorithm box turn yellow with them.
+     */
+    private void refreshMemory() {
+        if (kind != DataKind.LINK) return;
+        int buckets = ngramBuckets();
+        long rows = estimateRows();
+        WekaNeeds.Estimate est = WekaNeeds.estimate(rows, buckets);
+        long total = Environment.totalRam(), free = Environment.freeRam();
+        long wekaMb = Environment.parseMegabytes(wekaHeapField.getText());
+        long appHeap = Environment.appMaxHeap();
+        String appSource = Environment.appHeapSource();
+        List<String> warnings = WekaNeeds.warnings(est, total, free, wekaMb, wekaHeapSource, appHeap, appSource,
+                loaded == null ? 0 : loaded.sizeBytes());
+        boolean warn = !warnings.isEmpty();
+
+        // algorithm beside the n-gram list
+        algoLabel.setText("Weka algorithm: " + est.algorithms() + (est.ngrams() ? "\nDo not use: " + est.avoid() : ""));
+        algoLabel.getStyleClass().removeAll("algo-box", "algo-box-warn");
+        algoLabel.getStyleClass().add(warn ? "algo-box-warn" : "algo-box");
+        ngramBox.getStyleClass().remove("combo-warn");
+        if (warn) ngramBox.getStyleClass().add("combo-warn");
+
+        GridPane g = new GridPane();
+        g.setHgap(12);
+        g.setVgap(4);
+        int row = 0;
+        addMem(g, row++, "Rows to export (estimate)", rows > 0 ? Ui.num(rows) : "open a file to estimate");
+        if (rows > 0) {
+            addMem(g, row++, est.ngrams() ? "Weka needs (sparse-safe algorithm)" : "Weka needs", Environment.size(est.requiredBytes()));
+            if (est.ngrams()) addMem(g, row++, "Weka needs (any other algorithm)", Environment.size(est.denseBytes()));
+        }
+        Button refresh = new Button("Refresh");
+        refresh.getStyleClass().add("btn-small");
+        refresh.setOnAction(e -> refreshMemory());
+        g.add(Ui.label("RAM of this computer", "section-title"), 0, row);
+        g.add(new HBox(10, new Label(Environment.size(total) + " total, " + Environment.size(free) + " free"), refresh), 1, row++);
+        HBox wekaRow = new HBox(8, wekaHeapField, new Label("MB"), Ui.label("(" + (wekaHeapField.getText().isBlank()
+                ? "type it, or find maxheap in RunWeka.ini; Weka's default is 1024" : wekaHeapSource) + ")", "muted"));
+        wekaRow.setAlignment(Pos.CENTER_LEFT);
+        g.add(Ui.label("Weka Java heap (-Xmx)", "section-title"), 0, row);
+        g.add(wekaRow, 1, row++);
+        addMem(g, row, "Java heap of this tool", Environment.size(appHeap) + "  (" + appSource + ")");
+
+        memBox.getChildren().setAll(g);
+        for (String w : warnings) memBox.getChildren().add(Ui.notice(w, "warn"));
+        if (warnings.isEmpty() && rows > 0 && est.ngrams()) {
+            memBox.getChildren().add(Ui.notice("Memory is enough for the algorithms listed above. Any other algorithm expands the file to "
+                    + Environment.size(est.denseBytes()) + ".", "info"));
+        }
+    }
+
+    private static void addMem(GridPane g, int row, String name, String value) {
+        g.add(Ui.label(name, "section-title"), 0, row);
+        g.add(new Label(value), 1, row);
     }
 
     // ================================================================== state
@@ -199,7 +324,7 @@ public final class ConvertPane extends ScrollPane {
     private void onDragOver(DragEvent e) {
         if (e.getDragboard().hasFiles() && !busy) {
             e.acceptTransferModes(TransferMode.COPY);
-            if (!dropZone.getStyleClass().contains("drop-zone-active")) dropZone.getStyleClass().add("drop-zone-active");
+            if (!dropTitle.getStyleClass().contains("file-field-active")) dropTitle.getStyleClass().add("file-field-active");
         }
         e.consume();
     }
@@ -209,7 +334,7 @@ public final class ConvertPane extends ScrollPane {
         boolean ok = files != null && !files.isEmpty();
         if (ok) loadFile(files.get(0).toPath());
         e.setDropCompleted(ok);
-        dropZone.getStyleClass().remove("drop-zone-active");
+        dropTitle.getStyleClass().remove("file-field-active");
         e.consume();
     }
 
@@ -238,6 +363,7 @@ public final class ConvertPane extends ScrollPane {
         Ui.show(columnsBox, false);
         noticeBox1.getChildren().clear();
         updateState();
+        refreshMemory();
 
         Task<LoadResult> task = new Task<>() {
             @Override protected LoadResult call() throws Exception {
@@ -297,6 +423,7 @@ public final class ConvertPane extends ScrollPane {
             if (r.totalRows() == 0) setNotice(noticeBox1, "The file has a header but no rows.", "bad");
         }
         updateState();
+        refreshMemory();
     }
 
     private void addInfo(int row, String name, String value) {
@@ -380,6 +507,7 @@ public final class ConvertPane extends ScrollPane {
         // sensible default for links: domain mode when the data is biased
         if (kind == DataKind.LINK) modeBox.getSelectionModel().select(r.hasStrongBias() ? 0 : 1);
         updateState();
+        refreshMemory();
     }
 
     private Node classBar(CheckReport r) {
@@ -473,7 +601,7 @@ public final class ConvertPane extends ScrollPane {
         final LoadResult data = loaded;
         final boolean domain = kind == DataKind.LINK && modeBox.getSelectionModel().getSelectedIndex() == 0;
         final DatasetBuilder.Options options = new DatasetBuilder.Options(kind, domain, balance.isSelected(),
-                dropInvalid.isSelected() && !report.skipped(), data.has("subject"), data.has("sender"));
+                dropInvalid.isSelected() && !report.skipped(), data.has("subject"), data.has("sender"), ngramBuckets());
         final Path target = out;
 
         Task<ExportSummary> task = new Task<>() {
@@ -544,7 +672,7 @@ public final class ConvertPane extends ScrollPane {
         boolean domain = kind == DataKind.LINK && modeBox.getSelectionModel().getSelectedIndex() == 0;
         try {
             List<Path> files = ExtractorExporter.export(kind, folder, packageField.getText(), domain,
-                    loaded.has("subject"), loaded.has("sender"));
+                    loaded.has("subject"), loaded.has("sender"), ngramBuckets());
             db.setSetting("package_name", packageField.getText().trim());
             db.setSetting("last_dir", folder.toAbsolutePath().toString());
             StringBuilder names = new StringBuilder();
@@ -586,8 +714,10 @@ public final class ConvertPane extends ScrollPane {
         bar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
         Ui.show(status, true);
         status.textProperty().bind(task.messageProperty());
+        task.messageProperty().addListener((o, a, b) -> { if (b != null && !b.isEmpty()) Ui.STATUS.set(b); });
         Runnable finish = () -> {
             busy = false;
+            Ui.STATUS.set("OK");
             status.textProperty().unbind();
             Ui.show(bar, false);
             Ui.show(status, false);
@@ -596,6 +726,7 @@ public final class ConvertPane extends ScrollPane {
         task.setOnFailed(e -> {
             finish.run();
             Throwable ex = task.getException();
+            Ui.STATUS.set("Failed");
             onFail.accept(ex);
             if (ex instanceof OutOfMemoryError) System.gc();
         });
